@@ -4,6 +4,7 @@ import requests
 import time
 from bs4 import BeautifulSoup
 from urllib.parse import urlencode
+from concurrent.futures import ThreadPoolExecutor
 
 INPUT_CSV = "uscities.csv"
 BASE_URL = "https://nces.ed.gov/globallocator/index.asp"
@@ -96,9 +97,9 @@ print(f"Loaded {len(cities)} cities")
 # Main loop
 # ------------------------
 
-for i, (city, pop) in enumerate(cities[START_INDEX:], start=START_INDEX):
+def process_city(i, city, pop):
     print(f"[{i}] {city} (pop: {pop})")
-
+    
     city_slug = normalize_city(city)
     city_dir = os.path.join("schools", city_slug)
     os.makedirs(city_dir, exist_ok=True)
@@ -127,13 +128,14 @@ for i, (city, pop) in enumerate(cities[START_INDEX:], start=START_INDEX):
 
         print(f"  → {len(public_rows)} public, {len(private_rows)} private")
 
-        # Prevent rate limiting
-        time.sleep(1.5)
-
     except Exception as e:
         print(f"  ❌ Error: {e}")
 
         with open(os.path.join(city_dir, "error.txt"), "w") as f:
             f.write(str(e))
 
-        continue
+
+with ThreadPoolExecutor(max_workers=20) as executor:
+    future_to_city = {
+        executor.submit(process_city, i, city, pop): city for i, (city, pop) in enumerate(cities[START_INDEX:], start=START_INDEX)
+    }
